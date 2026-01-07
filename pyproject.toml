@@ -11,13 +11,12 @@ authors = [
     {name = "Isaac D. Mehlhaff", email = "imehlhaff@uchicago.edu"},
     {name = "Marco Morucci", email = "moruccim@msu.edu"}
 ]
-license = {text = "MIT"}
+license = "MIT"
 requires-python = ">=3.8"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
@@ -32,7 +31,6 @@ keywords = ["deep-learning", "machine-learning", "nlp", "multi-task-learning", "
 dependencies = [
     "tensorflow>=2.15.0",
     "tensorflow-hub>=0.15.0",
-    "tensorflow-text>=2.15.0",
     "numpy>=1.24.0",
     "scikit-learn>=1.3.0",
     "pandas>=2.0.0",
@@ -41,6 +39,9 @@ dependencies = [
 [project.optional-dependencies]
 huggingface = [
     "transformers>=4.30.0",
+]
+text = [
+    "tensorflow-text>=2.15.0",
 ]
 dev = [
     "pytest>=7.4.0",
