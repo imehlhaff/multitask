@@ -29,6 +29,9 @@ A flexible multi-task learning library for NLP supporting mixed task types (bina
 
 ## Installation
 
+First, create a folder `multitask/data` and populate with the data provided. Ask someone for a dropbox link.
+
+**Local development installation:**
 ```bash
 # Basic (for development only - change before distributing)
 pip install -e .
@@ -37,9 +40,20 @@ pip install -e .
 pip install tensorflow-hub transformers
 ```
 
+**Conda installation:**
+```
+# Create the environment from the file
+conda env create -f environment.yml
+
+# Activate the environment
+conda activate multitask
+```
+
 **Platform-specific GPU support:**
 - Apple Silicon: `pip install tensorflow-macos tensorflow-metal`
 - NVIDIA: `pip install tensorflow[and-cuda]`
+
+
 
 ## Quick Start
 

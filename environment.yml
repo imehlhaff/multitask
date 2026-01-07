@@ -1,0 +1,9 @@
+name: multitask
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11 # Works with TensorFlow. 3.13 has TensorFlow compatibility issues.
+  - pip
+  - pip:
+    - -e .

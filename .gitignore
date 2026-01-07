@@ -159,3 +159,4 @@ results/
 # Except config in the package
 !multitask/**/*.yaml
 !multitask/**/*.json
+!environment.yml
