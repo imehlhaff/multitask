@@ -777,11 +777,9 @@ class MultiTaskModel(tf.keras.Model):
         os.makedirs(filepath, exist_ok=True)
         
         # Save model weights
-        weights_path = os.path.join(filepath, 'weights')
-        if save_format == 'tf':
-            self.save_weights(weights_path, save_format='tf')
-        else:
-            self.save_weights(weights_path + '.h5', save_format='h5')
+        # Note: Keras requires .weights.h5 extension for save_weights()
+        weights_path = os.path.join(filepath, 'weights.weights.h5')
+        self.save_weights(weights_path)
         
         # Save ModelConfig
         config_dict = {
