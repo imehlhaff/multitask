@@ -112,13 +112,24 @@ def load_model(
     _ = model(dummy_input, training=False)
     
     # Load weights
-    weights_path = os.path.join(filepath, 'weights')
-    if os.path.exists(weights_path):
-        model.load_weights(weights_path)
-    elif os.path.exists(weights_path + '.h5'):
-        model.load_weights(weights_path + '.h5')
+    # Check for weights.weights.h5 (Keras format) first, then fall back to other formats
+    weights_path_h5 = os.path.join(filepath, 'weights.weights.h5')
+    weights_path_legacy = os.path.join(filepath, 'weights.h5')
+    weights_path_dir = os.path.join(filepath, 'weights')
+    
+    if os.path.exists(weights_path_h5):
+        model.load_weights(weights_path_h5)
+    elif os.path.exists(weights_path_legacy):
+        model.load_weights(weights_path_legacy)
+    elif os.path.exists(weights_path_dir):
+        model.load_weights(weights_path_dir)
     else:
-        raise ValueError(f"Weights file not found: {weights_path}")
+        raise ValueError(
+            f"Weights file not found. Checked:\n"
+            f"  - {weights_path_h5}\n"
+            f"  - {weights_path_legacy}\n"
+            f"  - {weights_path_dir}"
+        )
     
     # Load thresholds if available
     thresholds = None
