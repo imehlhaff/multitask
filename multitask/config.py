@@ -36,12 +36,14 @@ class TrainingConfig:
     early_stopping_min_delta: float = 0.001
     
     # Optimizer settings
-    optimizer_type: str = 'adamw'  # 'adamw', 'adam', 'sgd'
+    # 'adamw' ran into errors for me locally
+    optimizer_type: str = 'adam'  # 'adamw', 'adam', 'sgd'
     
     # Learning rate schedule settings
     use_lr_schedule: bool = True
     lr_schedule_type: str = 'polynomial_decay'  # 'polynomial_decay', 'exponential_decay', 'cosine_decay', 'constant'
-    use_warmup: bool = True
+    # Also some errors when using warmup
+    use_warmup: bool = False
     
     def __post_init__(self):
         """Validate configuration after initialization."""
