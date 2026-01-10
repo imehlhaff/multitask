@@ -86,9 +86,9 @@ def load_model(
     model = MultiTaskModel(
         config=model_config,
         encoder=encoder,
-        embedding_dim=metadata.get('embedding_dim'),
-        dropout_rate=metadata.get('dropout_rate', 0.3),
-        custom_objects=custom_objects
+        embedding_dim=metadata.get('embedding_dim')
+        # dropout_rate=metadata.get('dropout_rate', 0.3),
+        # custom_objects=custom_objects
     )
     
     # Build model by calling it once (required before loading weights)
