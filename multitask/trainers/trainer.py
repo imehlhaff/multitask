@@ -172,8 +172,8 @@ class Trainer:
                     loss_val = tf.keras.losses.binary_crossentropy(y_task_true, y_task_pred)
                     
                     # Apply class weights
-                    class_weight_0 = class_weights[task_idx].get(0, 1.0)
-                    class_weight_1 = class_weights[task_idx].get(1, 1.0)
+                    class_weight_0 = tf.constant(class_weights[task_idx].get(0, 1.0), dtype=tf.float32)
+                    class_weight_1 = tf.constant(class_weights[task_idx].get(1, 1.0), dtype=tf.float32)
                     
                     # Create per-sample class weights based on true labels
                     sample_class_weights = tf.where(
@@ -194,7 +194,7 @@ class Trainer:
                     num_classes = self.model.config.get_num_classes(task_idx)
                     sample_class_weights = tf.zeros_like(y_task_true, dtype=tf.float32)
                     for class_idx in range(num_classes):
-                        class_weight = class_weights[task_idx].get(class_idx, 1.0)
+                        class_weight = tf.constant(class_weights[task_idx].get(class_idx, 1.0), dtype=tf.float32)
                         sample_class_weights = tf.where(
                             tf.equal(y_task_true_valid, class_idx),
                             class_weight,
@@ -207,8 +207,8 @@ class Trainer:
                     loss_val = tf.keras.losses.binary_crossentropy(y_task_true, y_task_pred)
                     
                     # Apply class weights (per class, binary)
-                    class_weight_0 = class_weights[task_idx].get(0, 1.0)
-                    class_weight_1 = class_weights[task_idx].get(1, 1.0)
+                    class_weight_0 = tf.constant(class_weights[task_idx].get(0, 1.0), dtype=tf.float32)
+                    class_weight_1 = tf.constant(class_weights[task_idx].get(1, 1.0), dtype=tf.float32)
                     
                     # For multilabel, apply weights per class
                     sample_class_weights = tf.where(
@@ -225,7 +225,8 @@ class Trainer:
                 masked_loss = loss_val * mask
                 
                 # Apply task weight (ν_k from paper)
-                weighted_loss = masked_loss * task_weights[task_idx]
+                task_weight = tf.constant(task_weights[task_idx], dtype=tf.float32)
+                weighted_loss = masked_loss * task_weight
                 
                 total_loss += tf.reduce_sum(weighted_loss)
                 num_valid_samples += tf.reduce_sum(mask)
