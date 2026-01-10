@@ -100,12 +100,24 @@ def load_model(
                 'attention_mask': tf.ones((1, 128), dtype=tf.int32),
                 'token_type_ids': tf.zeros((1, 128), dtype=tf.int32),
             }
-        else:  # tfhub or custom
-            dummy_input = {
-                'input_word_ids': tf.zeros((1, 128), dtype=tf.int32),
-                'input_mask': tf.ones((1, 128), dtype=tf.int32),
-                'input_type_ids': tf.zeros((1, 128), dtype=tf.int32),
-            }
+        elif model.encoder_type == 'tfhub':
+            # Check if it's Universal Sentence Encoder (expects strings) or BERT-style (expects tokenized dict)
+            encoder_identifier = metadata.get('encoder_identifier', '')
+            if encoder_identifier and 'universal-sentence-encoder' in encoder_identifier.lower():
+                # Universal Sentence Encoder expects raw string inputs
+                dummy_input = tf.constant(["dummy text for model building"], dtype=tf.string)
+            else:
+                # BERT-style TF Hub models expect tokenized dictionary
+                dummy_input = {
+                    'input_word_ids': tf.zeros((1, 128), dtype=tf.int32),
+                    'input_mask': tf.ones((1, 128), dtype=tf.int32),
+                    'input_type_ids': tf.zeros((1, 128), dtype=tf.int32),
+                }
+        else:  # custom encoder
+            # For custom encoders, we can't determine input format automatically
+            # Default to string input (common for sentence encoders)
+            # User may need to provide encoder explicitly if this fails
+            dummy_input = tf.constant(["dummy text for model building"], dtype=tf.string)
     else:
         dummy_input = tf.zeros((1, metadata['embedding_dim']))
     
