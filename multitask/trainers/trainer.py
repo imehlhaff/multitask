@@ -303,9 +303,8 @@ class Trainer:
         
         # Build optimizer based on type
         if self.config.optimizer_type.lower() == 'adamw':
-            optimizer = optimization.AdamWeightDecay(
-                learning_rate=lr_schedule,
-                weight_decay_rate=self.config.weight_decay_rate
+            optimizer = tf.keras.optimizers.AdamW(
+                learning_rate=lr_schedule
             )
         elif self.config.optimizer_type.lower() == 'adam':
             optimizer = tf.keras.optimizers.Adam(
