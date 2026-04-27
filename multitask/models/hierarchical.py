@@ -511,7 +511,11 @@ class MultiTaskModel(tf.keras.Model):
             y_true = y[matched_task]
             y_hat = y_pred_filtered[matched_task]
 
-            mask = tf.not_equal(tf.reshape(y_true, [-1]), self.config.mask_value)
+            y_true_flat = tf.reshape(y_true, [-1])
+            mask = tf.logical_and(
+                tf.not_equal(y_true_flat, tf.cast(self.config.mask_value, y_true_flat.dtype)),
+                tf.logical_not(tf.math.is_nan(tf.cast(y_true_flat, tf.float32))))
+            
             if tf.reduce_any(mask):
                 y_true_masked = tf.boolean_mask(y_true, mask)
                 y_hat_masked  = tf.boolean_mask(y_hat,  mask)
@@ -555,7 +559,11 @@ class MultiTaskModel(tf.keras.Model):
             y_true = y[matched_task]
             y_hat = y_pred_filtered[matched_task]
 
-            mask = tf.not_equal(tf.reshape(y_true, [-1]), self.config.mask_value)
+            y_true_flat = tf.reshape(y_true, [-1])
+            mask = tf.logical_and(
+                tf.not_equal(y_true_flat, tf.cast(self.config.mask_value, y_true_flat.dtype)),
+                tf.logical_not(tf.math.is_nan(tf.cast(y_true_flat, tf.float32)))
+            )
             if tf.reduce_any(mask):
                 y_true_masked = tf.boolean_mask(y_true, mask)
                 y_hat_masked  = tf.boolean_mask(y_hat,  mask)

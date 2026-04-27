@@ -260,7 +260,17 @@ class Trainer:
                     # MSE loss, no class weighting
                     y_true_flat = tf.reshape(y_task_true, [-1])
                     y_pred_flat = tf.reshape(y_task_pred, [-1])
-                    mask = tf.cast(tf.not_equal(y_true_flat, mask_value), tf.float32)
+                    mask = tf.cast(
+                        tf.logical_and(
+                            tf.not_equal(y_true_flat, tf.cast(mask_value, y_true_flat.dtype)),
+                            tf.logical_not(tf.math.is_nan(y_true_flat))), tf.float32)
+                    # Zero out masked/NaN positions to prevent NaN propagation
+                    # through tf.square below; the mask cancels their contribution.
+                    y_true_flat = tf.where(
+                        tf.cast(mask, tf.bool),
+                        y_true_flat,
+                        tf.zeros_like(y_true_flat),
+                    )
                     
                     # Standardize both target and prediction before MSE.
                     # This is equivalent to MSE / std², which scales down the
@@ -307,11 +317,17 @@ class Trainer:
                     y_true_flat = tf.reshape(y_task_true, [-1])
                     y_pred_flat = tf.reshape(y_task_pred, [-1])
                     mask_val = tf.cast(mask_value, y_true_flat.dtype)
-                    mask = tf.cast(tf.not_equal(y_true_flat, mask_val), tf.float32)
+                    mask = tf.cast(
+                        tf.logical_and(
+                            tf.not_equal(y_true_flat, mask_val),
+                            tf.logical_not(tf.math.is_nan(y_true_flat))), tf.float32)
+                    # Replace ALL invalid positions (mask_value AND NaN) with 0
+                    # to prevent NaN from propagating through binary_crossentropy;
+                    # the mask zeros out their contribution downstream.
                     safe_labels = tf.where(
-                        tf.equal(y_true_flat, mask_val),
-                        tf.zeros_like(y_true_flat),
+                        tf.cast(mask, tf.bool),
                         y_true_flat,
+                        tf.zeros_like(y_true_flat),
                     )
                     loss_val = tf.keras.losses.binary_crossentropy(
                         tf.reshape(safe_labels, [-1, 1]),
@@ -667,9 +683,16 @@ class Trainer:
             for task_name in task_names:
                 labels = labels_dict[task_name]
                 # Count non-masked samples (not equal to self.mask_value)
-                mask_val = tf.cast(self.mask_value, labels.dtype)
+                labels_float = tf.cast(labels, tf.float32) if not labels.dtype.is_floating else labels
+                mask_val = tf.cast(self.mask_value, labels_float.dtype)
                 non_masked = tf.reduce_sum(
-                    tf.cast(tf.not_equal(labels, mask_val), tf.int32)
+                    tf.cast(
+                        tf.logical_and(
+                            tf.not_equal(labels_float, mask_val),
+                            tf.logical_not(tf.math.is_nan(labels_float))
+                        ),
+                        tf.int32
+                    )
                 ).numpy()
                 task_sample_counts[task_name] += non_masked
             
