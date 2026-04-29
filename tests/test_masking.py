@@ -394,3 +394,69 @@ def test_full_fit_step_with_nan_does_not_corrupt_weights():
     assert np.isfinite(history.history["loss"][0]), (
         f"training loss is non-finite: {history.history['loss']}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Numpy-side mask sites (_compute_class_weights, _compute_regression_stats)
+# ---------------------------------------------------------------------------
+
+def test_class_weights_handles_nan_labels():
+    """_compute_class_weights must not crash with bincount error on NaN labels."""
+    np.random.seed(0)
+    x = np.random.randn(20, 8).astype(np.float32)
+    # task_0 has NaN values mixed with 0s and 1s
+    y = {
+        "task_0": np.array(
+            [0.0, 1.0, np.nan, 0.0, 1.0, np.nan, 0.0, 1.0,
+             np.nan, 0.0, 1.0, np.nan, 0.0, 1.0, 0.0, 1.0,
+             np.nan, np.nan, 0.0, 1.0],
+            dtype=np.float32,
+        ),
+    }
+
+    _, trainer = _build_model_and_trainer(["binary"], mask_value=-1.0)
+    ds = _make_dataset(x, y, batch_size=20)
+
+    # This used to crash with "ValueError: 'list' argument must have no negative
+    # elements" because labels.astype(int) on NaN produces a huge negative int.
+    weights = trainer._compute_class_weights(ds)
+    assert len(weights) == 1
+    assert all(np.isfinite(v) for v in weights[0].values()), (
+        f"class weights have non-finite values: {weights}"
+    )
+
+
+def test_regression_stats_excludes_nan_labels():
+    """_compute_regression_stats must exclude NaN from mean/std computation."""
+    np.random.seed(0)
+    x = np.random.randn(20, 8).astype(np.float32)
+    y = {
+        "task_0": np.array(
+            [1.0, 2.0, 3.0, 4.0, 5.0,
+             np.nan, np.nan, np.nan,
+             6.0, 7.0, 8.0, 9.0, 10.0,
+             np.nan, np.nan,
+             11.0, 12.0, 13.0, 14.0, 15.0],
+            dtype=np.float32,
+        ),
+    }
+    cfg = ModelConfig(
+        task_structure=[[1]],
+        task_names=["task_0"],
+        task_types=["regression"],
+        num_classes_per_task=[1],
+        embedding_dim=8,
+        mask_value=-1.0,
+        standardize_regression=True,
+    )
+    model = MultiTaskModel(cfg, embedding_dim=8)
+    trainer = Trainer(model)
+    ds = _make_dataset(x, y, batch_size=20)
+
+    stats = trainer._compute_regression_stats(ds)
+
+    # 15 valid values (1..15), expected mean = 8.0, std finite
+    assert "task_0" in stats, f"stats missing task_0: {stats}"
+    assert np.isfinite(stats["task_0"]["mean"]), f"mean is non-finite: {stats}"
+    assert np.isfinite(stats["task_0"]["std"]), f"std is non-finite: {stats}"
+    np.testing.assert_allclose(stats["task_0"]["mean"], 8.0, rtol=1e-5)

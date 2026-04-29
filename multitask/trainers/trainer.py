@@ -139,7 +139,10 @@ class Trainer:
             
             for task_name in regression_tasks:
                 labels = labels_dict[task_name].numpy().ravel()
-                valid = labels[labels != self.mask_value]
+                # Filter mask_value AND NaN. Plain `!=` lets NaN through
+                # (NaN != anything is True), corrupting mean/std with NaN.
+                labels_float = labels.astype(np.float64)
+                valid = labels[(labels_float != self.mask_value) & ~np.isnan(labels_float)]
                 if len(valid) > 0:
                     task_values[task_name].extend(valid.tolist())
             
@@ -742,10 +745,14 @@ class Trainer:
                 real_idx = list(self.model.task_names).index(task_name)
                 task_type = self.model.config.get_task_type(real_idx)
                 
-                # Flatten and filter out masked values
+                # Flatten and filter mask_value AND NaN. Plain `!=` lets
+                # NaN through (NaN != anything is True), and labels.astype(int)
+                # below converts NaN to a huge negative integer, crashing
+                # np.bincount with "negative elements".
                 if len(labels.shape) > 1:
                     labels = labels.flatten()
-                valid_labels = labels[labels != self.mask_value]
+                labels_float = labels.astype(np.float64)
+                valid_labels = labels[(labels_float != self.mask_value) & ~np.isnan(labels_float)]
                 
                 if len(valid_labels) > 0:
                     task_labels[task_name].extend(valid_labels.tolist())
