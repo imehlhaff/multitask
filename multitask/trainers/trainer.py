@@ -599,7 +599,7 @@ class Trainer:
                     y_task_pred = y_task_pred[:, 0]
                     y_task_true = y_task_true[:, 0] if y_task_true.ndim > 1 else y_task_true
                 
-                valid_mask = y_task_true != mask_value
+                valid_mask = np.isfinite(y_task_true) & (y_task_true != mask_value)
                 y_task_true_valid = y_task_true[valid_mask]
                 y_task_pred_valid = y_task_pred[valid_mask]
                 
@@ -629,7 +629,7 @@ class Trainer:
                     y_col_true = y_task_true[:, col_idx] if y_task_true.ndim > 1 else y_task_true
                     y_col_pred = y_task_pred[:, col_idx]
                     
-                    valid_mask = y_col_true != mask_value
+                    valid_mask = np.isfinite(y_col_true) & (y_col_true != mask_value)
                     y_col_true_valid = y_col_true[valid_mask]
                     y_col_pred_valid = y_col_pred[valid_mask]
                     
@@ -1219,7 +1219,7 @@ class Trainer:
             y_out_pred_probs = y_pred_dict[name]
             
             # Filter out masked values
-            valid_mask = y_out_true != mask_value
+            valid_mask = np.isfinite(y_out_true) & (y_out_true != mask_value)
             if y_out_true.ndim > 1:
                 valid_mask = valid_mask[:, 0] if valid_mask.shape[1] > 0 else np.ones(y_out_true.shape[0], dtype=bool)
             
