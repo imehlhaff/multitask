@@ -1029,9 +1029,12 @@ class Trainer:
                     y_val_true_dict, y_val_pred_dict
                 )
                 
-                valid_f1_scores = [f1 for f1 in f1_scores.values() if f1 is not None and f1 > 0]
+                valid_f1_scores = [f1 for f1 in f1_scores.values() if f1 is not None]
                 if valid_f1_scores:
-                    print(f"Average validation F1: {np.mean(valid_f1_scores):.4f}")
+                    n_zero = sum(1 for f1 in valid_f1_scores if f1 == 0.0)
+                    suffix = (f" ({n_zero}/{len(valid_f1_scores)} tasks scored 0)"
+                              if n_zero else f" (n={len(valid_f1_scores)})")
+                    print(f"Average validation F1: {np.mean(valid_f1_scores):.4f}{suffix}")
             else:
                 # Use default thresholds for transparency
                 print("\nUsing default thresholds (0.5 for binary/multilabel, None for multiclass)")
@@ -1285,7 +1288,7 @@ class Trainer:
             # Compute binary metrics if thresholds available
             if use_thresholds is not None and task_type not in ('multiclass', 'regression'):
                 y_out_pred_binary = y_pred_binary_dict[name][valid_mask]
-                avg_method = 'binary' if task_type == 'binary' else 'weighted'
+                avg_method = 'weighted'
                 
                 if 'accuracy' in metrics:
                     acc = accuracy_score(y_out_true_binary, y_out_pred_binary)
