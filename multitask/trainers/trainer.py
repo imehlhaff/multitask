@@ -216,13 +216,17 @@ class Trainer:
         
         # task_weights is list-aligned to model tasks; tasks in the same task-type
         # share one ν_k by averaging user/computed values within that type.
-        task_type_weights: Dict[str, float] = {}
+        task_type_weights_raw: Dict[str, List[float]] = {}
         for task_name, task_weight in zip(task_names, task_weights):
             task_type = resolved_task_type_mapping[task_name]
-            task_type_weights.setdefault(task_type, []).append(float(task_weight))
+            task_type_weights_raw.setdefault(task_type, []).append(float(task_weight))
         task_type_weights = {
             task_type: float(np.mean(weights))
-            for task_type, weights in task_type_weights.items()
+            for task_type, weights in task_type_weights_raw.items()
+        }
+        task_type_within_factors = {
+            task_type: tf.cast(1.0 / max(len(grouped_tasks), 1), tf.float32)
+            for task_type, grouped_tasks in task_type_to_tasks.items()
         }
         
         def dict_weighted_masked_loss(y_true_dict: Any, y_pred_dict: Any):
@@ -231,10 +235,11 @@ class Trainer:
             For each task:
             1. Compute task-specific loss based on task type (binary/multiclass/multilabel)
             2. Apply mask to exclude invalid labels
-            3. Apply task weight to prioritize certain tasks
+            3. Apply task-type weight ν_k and within-type factor 1/|T_k|
             4. Accumulate into total loss
             
-            Final loss is averaged over all valid (non-masked) samples.
+            Final loss is the weighted sum over task-types (paper-style formulation),
+            not a global mean over valid entries.
             
             Note: During graph construction, Keras may pass SymbolicTensor objects
             instead of dicts. This function handles both cases.
@@ -268,8 +273,6 @@ class Trainer:
                     )
             
             total_loss = 0.0
-            has_any_valid = tf.constant(False)
-            
             for real_idx, task_name in enumerate(self.model.task_names):
                 y_task_true = y_true_dict[task_name]
                 y_task_pred = y_pred_dict[task_name]
@@ -360,18 +363,16 @@ class Trainer:
                 
                 # final aggregation: ν_k * (1/|T_k|) * sum loss over valid entries
                 task_type_id = resolved_task_type_mapping[task_name]
-                within_task_type_factor = 1.0 / max(len(task_type_to_tasks[task_type_id]), 1)
                 task_type_weight = tf.cast(task_type_weights[task_type_id], tf.float32)
                 weighted_loss = (
                     loss_val
                     * mask
                     * task_type_weight
-                    * tf.cast(within_task_type_factor, tf.float32)
+                    * task_type_within_factors[task_type_id]
                 )
                 total_loss += tf.reduce_sum(weighted_loss)
-                has_any_valid = tf.logical_or(has_any_valid, tf.reduce_any(mask > 0))
             
-            return tf.where(has_any_valid, total_loss, tf.constant(0.0, dtype=tf.float32))
+            return total_loss
         
         return dict_weighted_masked_loss
 
@@ -948,20 +949,12 @@ class Trainer:
                     print(f"Computed class weights for {len(class_weights)} tasks")
                 
                 if task_weights is None:
-                    print("Computing task weights from training data...")
+                    print("Computing task-type weights (nu_k) from training data...")
                     task_weights = self._compute_task_weights(
                         train_dataset,
                         task_type_mapping=task_type_mapping,
                     )
-                    print(f"Task weights: {[f'{w:.3f}' for w in task_weights]}")
-                    
-                if task_weights is None:
-                    print("Computing task weights from training data...")
-                    task_weights = self._compute_task_weights(
-                        train_dataset,
-                        task_type_mapping=task_type_mapping,
-                    )
-                    print(f"Task weights: {[f'{w:.3f}' for w in task_weights]}")
+                    print(f"Task-type-aligned weights: {[f'{w:.3f}' for w in task_weights]}")
                 
                 # Compute regression standardization stats from training data
                 regression_stats = self._compute_regression_stats(train_dataset)

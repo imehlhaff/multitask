@@ -126,7 +126,7 @@ def test_task_weights_importance():
     
     loss = loss_fn(y_true, y_pred)
     # Expected with multiclass one-vs-rest BCE:
-    # binary(0.5, y=1)=0.693; multiclass sum BCE(label=0,[0.5,0.25,0.25])=1.269
+    # binary(0.5, y=1)=0.693; multiclass sum BCE(label=0, [0.5,0.25,0.25])=1.269
     # total = (0.693 * 10) + (1.269 * 1) = 8.199
     assert loss.numpy() == pytest.approx(8.199, abs=0.05)
 
@@ -176,7 +176,8 @@ def test_task_type_weights_grouping_and_within_type_factor():
     )
     loss = loss_fn(y_true, y_pred)
 
-    # ν_A*(1/|T_A|)*(L_a1+L_a2) + ν_B*(1/|T_B|)*L_b = 1.2*0.693 + 0.8*0.693
+    # ν_A*(1/|T_A|)*(L_a1+L_a2) + ν_B*(1/|T_B|)*L_b
+    # = 1.2*0.5*(0.693+0.693) + 0.8*1.0*0.693 = 1.386
     assert loss.numpy() == pytest.approx(1.386, abs=0.05)
 
 
@@ -203,7 +204,7 @@ def test_multiclass_bce_with_masking_and_class_weights():
     )
     loss = loss_fn(y_true, y_pred)
 
-    # First row masked. Second row contributes:
+    # First row is masked out. For the unmasked second row:
     # -log(0.9)*1 + -log(0.8)*2 + -log(0.7)*3 = 1.6217
     assert loss.numpy() == pytest.approx(1.6217, abs=0.02)
 
@@ -228,7 +229,7 @@ def test_regression_standardization_remains_active():
     )
     loss = loss_fn(y_true, y_pred)
 
-    # ((12-10)/2)^2 = 1.0 with regression standardization applied.
+    # ((12-10)/2)^2 = 1.0 (squared error with regression standardization applied).
     assert loss.numpy() == pytest.approx(1.0, abs=0.001)
 
 
