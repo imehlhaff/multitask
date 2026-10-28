@@ -42,6 +42,7 @@ Master codebook: https://www.comparativeagendas.net/pages/master-codebook
 - US platforms: use `majortopic` (CAP master), not `pap_majortopic` (US Policy Agendas). They differ on ~130 Dem / ~1,090 Rep rows: PAP 5 → CAP 13, PAP 6 → CAP 23, and PAP `-555` → CAP `0`. `majortopic` still has `-555` (59 Dem / 131 Rep rows), blanks (41 Dem rows) and a few codes outside the scheme (24, 26, 27, 28, 31; ≤11 rows per file). Drop these.
 - The Irish file has mojibake in places (e.g. `TaoiseachÂ’s`).
 - UK (and maybe Irish) manifestos may overlap with sentences in CMP. Split by document to avoid leakage across datasets.
+- **[NOTE 10/28] Strip punctuation, lowercase, and spellchecking would rewrite correct text so they lose meaning.** E.g. `UK` lowercased to `uk` and spellchecked to `up` or `U.S.` turned into `us`, `WHO` to `who`, etc. **Cased models (e.g. RoBERTa) make use of capitals and punctuation.** Tokenizers also lowercase the text itself.
 
 ## Not used
 - Non-English datasets, including the manifestos from other countries
