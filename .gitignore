@@ -145,7 +145,7 @@ saved_models/
 checkpoints/
 
 # Data files (project-specific, not part of library)
-data/
+# data/
 input/
 output/
 results/
