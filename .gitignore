@@ -146,6 +146,9 @@ checkpoints/
 
 # Data files (project-specific, not part of library)
 # data/
+data/semeval_propaganda/semeval2023task3bundle-v4/
+data/semeval_propaganda/semeval2023task3bundle-v4.tgz
+data/semeval_propaganda/00_summary.ipynb
 input/
 output/
 results/
