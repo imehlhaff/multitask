@@ -43,6 +43,9 @@ Master codebook: https://www.comparativeagendas.net/pages/master-codebook
 - The Irish file has mojibake in places (e.g. `TaoiseachÂ’s`).
 - UK (and maybe Irish) manifestos may overlap with sentences in CMP. Split by document to avoid leakage across datasets.
 - **[NOTE 10/28] Strip punctuation, lowercase, and spellchecking would rewrite correct text so they lose meaning.** E.g. `UK` lowercased to `uk` and spellchecked to `up` or `U.S.` turned into `us`, `WHO` to `who`, etc. **Cased models (e.g. RoBERTa) make use of capitals and punctuation.** Tokenizers also lowercase the text itself.
+- **[NOTE 11/5] US platforms have layered mojibake that `ftfy` only half repairs**, leaving a stray `í` in about 10% of US sentences. `01_clean.py` maps the raw sequences directly (`US_MOJIBAKE`): `√≠_` → space, `√≠√Ø`/`¬Ñ` → em dash, `√≠¬¥` → apostrophe, plus en dashes, quotes and bullets. Meanings are inferred from context, not from a known encoding.
+- **[NOTE 11/5] Some Irish documents have their own encoding damage**, fixed per document in `01_clean.py`. `irl_2_2002_1` is Windows-1252 read as Mac Roman (`F·il`, `Ä200`, `Weíre`), so it is re-decoded. `irl_2_1997_1` is the reverse and was partly lowercased (`d‡il`), so it uses a character table. **Its Irish-language sentences stay partly damaged:** `í` and `ó` became `'` and `-` (`buna'odh`, `telef-in`), and closing apostrophes became `i` (`sectoris`), which can't be separated from real punctuation or letters by rule.
+- **[NOTE 11/5] Broken words from PDF extraction.** Soft hyphens (Irish PDFs) are removed and the two sides rejoined, as are `fi`/`fl` splits in `uk_ld_2010`. Line-break hyphens on real compounds also get merged (`long­ term` → `longterm`, about 20 cases), since they look the same as split words without a dictionary.
 
 ## Not used
 - Non-English datasets, including the manifestos from other countries

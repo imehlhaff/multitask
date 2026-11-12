@@ -2,6 +2,7 @@
 Combine the CAP party manifesto/platform files into one sentence-level dataset.
 See notes.md for the issues handled here.
 """
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -22,6 +23,46 @@ IRL_TO_MASTER_SUBTOPIC = {
     1916: 1921, 1919: 1921, 1920: 1921, 1922: 1910, 1923: 1910, 2301: 2300, 2399: 2300,
 }
 
+# Layered mojibake in the raw US files, which ftfy only half repairs (e.g. "√≠_" -> "í_").
+# Meanings are inferred from context, see notes.md.
+US_MOJIBAKE = {
+    "√≠_": " ",
+    "√≠√Ø": "—", "¬Ñ": "—", "√ë": "—",
+    "√≠¬ê": "–",
+    "√≠¬ä": "...",
+    "√≠¬¥": "'", "√î": "'",
+    "√≠√ç": '"', "√≠√±": '"', "√≠√Æ": '"', "√í": '"', "√ì": '"',
+    "¬å¬´": "•",
+    "¬á": "á", "¬é": "é",
+    # One-offs
+    "communiqu¬Å_s": "communiqués", "Mart√§√≥¬ª": "Martí", "Mart√≠¬Ä¬å_": "Martí", "√≠¬¢√§¬â√•¬å_": "", "¬É": "",
+}
+US_MOJIBAKE_RE = "|".join(re.escape(k) for k in sorted(US_MOJIBAKE, key=len, reverse=True))
+
+# The 2010 Lib Dem PDF split "fi"/"fl" ligatures from the rest of the word ("offi ce", "fl awed")
+SPLIT_LIGATURE_RE = r"(?<![\w-])([^\W\d_]*(?:fi|fl))\s+([a-z]+)"
+
+# Wrong-encoding damage in individual Irish documents, see notes.md. irl_2_2002_1 is handled in fix_irl_encoding.
+IRL_DOC_FIXES = {
+    # Mac Roman read as Windows-1252, then partly lowercased
+    "irl_2_1997_1": {
+        "‡": "á", "œ": "ú", "ž": "é", "ƒ": "É", "ç": "á", "ê": "í", "î": "ó", "ÃŽ": "Ó", "\x8f": "è", "ð": "–", "ò": '"',
+    },
+    "irl_2_1987_1": {"à": "á", "GARDAI\x8d": "GARDAÍ"},
+    "irl_6_2002_1": {"¨": "€", "¤": "€", "ñ": "–"},
+    "irl_1_1997_1": {"¥": "•"},
+    "irl_1_1992_1": {"FÃ…S": "FÁS"},
+    "irl_3_1992_1": {"FÃ¥il": "Fáil"},
+    "irl_4_2002_1": {"FçS": "FÁS"},
+    "irl_5_2007_1": {"GardaÌ": "Gardaí"},
+}
+IRL_SHARED_FIXES = {
+    # "´" is an apostrophe, except where it stands in for a fada
+    "Fa´il": "Fáil", "Si´ocha´na": "Síochána", "Gardai´": "Gardaí", "´": "'",
+    # Unicode tags left as literal text
+    "<U+2208>": "€", "<U+2666>": "•", "<U+FB01>": "fi",
+}
+
 
 def load_uk():
     df = pd.read_csv(RAW_DIR / "uk_manifestos_v1__1.csv", encoding="cp1252")
@@ -30,7 +71,24 @@ def load_uk():
     df["country"] = "uk"
     df["text"] = df["description"]
     df["doc_id"] = "uk_" + df["party"] + "_" + df["year"].astype(str)
+    is_ld_2010 = df["doc_id"] == "uk_ld_2010"
+    df.loc[is_ld_2010, "text"] = df.loc[is_ld_2010, "text"].str.replace(SPLIT_LIGATURE_RE, r"\1\2", regex=True)
     return df
+
+
+def fix_irl_encoding(doc_id, text):
+    text = fix_text(text)
+    if doc_id == "irl_2_2002_1":
+        # Windows-1252 read as Mac Roman. The doc's few correct "€" signs come back as "Û".
+        text = text.replace("ÃŒ", "Ì").replace("<U+02D9>", "˙")
+        text = text.encode("mac_roman").decode("cp1252").replace("Û", "€")
+    elif doc_id == "irl_2_1997_1":
+        # Single quotes became an opening "ô" and a closing "i"
+        text = re.sub(r"ô([^ô]*?)i\b", r"'\1'", text)
+    for old, new in {**IRL_DOC_FIXES.get(doc_id, {}), **IRL_SHARED_FIXES}.items():
+        text = text.replace(old, new)
+    # Leftover of a closing double quote
+    return re.sub(r'["€]?\x9d', '"', text)
 
 
 def load_irl():
@@ -46,6 +104,7 @@ def load_irl():
     df["doc_id"] = (
         "irl_" + df["party"] + "_" + df["year"].astype(str) + "_" + df["election_in_year"].astype(str)
     )
+    df["text"] = [fix_irl_encoding(doc_id, text) for doc_id, text in zip(df["doc_id"], df["text"])]
     return df
 
 
@@ -54,7 +113,9 @@ def load_us(file_name, party):
     # Use the CAP master codes, not pap_majortopic/pap_subtopic (US Policy Agendas codes)
     df["party"] = party
     df["country"] = "us"
-    df["text"] = df["description"]
+    df["text"] = df["description"].astype(str).str.replace(
+        US_MOJIBAKE_RE, lambda m: US_MOJIBAKE[m.group(0)], regex=True
+    )
     # -555 subtopics only occur with majortopic 0 (no policy content)
     df["subtopic"] = df["subtopic"].replace(-555, 0)
     df["doc_id"] = "us_" + party + "_" + df["year"].astype(str)
@@ -74,7 +135,12 @@ if __name__ == "__main__":
     )
 
     # Fix mojibake (Irish and US files) and normalise whitespace
-    df["text"] = df["text"].astype(str).map(fix_text).str.split().str.join(" ")
+    df["text"] = df["text"].astype(str).map(fix_text)
+
+    # Rejoin words split by soft hyphens from PDF line breaks ("ecologi\xad cally") and the Irish "¬" variant
+    # ("relat¬¬ed"). "Gardai\xad" is an OCR misread of "Gardaí", not a split word.
+    df["text"] = df["text"].str.replace("Gardai\xad", "Gardaí", regex=False).str.replace(r"[\xad¬]+\s*", "", regex=True)
+    df["text"] = df["text"].str.split().str.join(" ")
 
     # Drop empty text, Excel formula errors, and -555 / blank / out-of-scheme topic codes
     df["majortopic"] = pd.to_numeric(df["majortopic"], errors="coerce")
