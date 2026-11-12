@@ -14,8 +14,8 @@ from multitask.config import EncoderConfig, EncoderInputType, EncoderIntegration
 CLEAN_DIR = Path(__file__).parent / "clean"
 
 # Tiny BERT for CPU run; swap in roberta-large (Kennedy et al. 2020) for larger run.
-ENCODER = "google/bert_uncased_L-2_H-128_A-2"
-MAX_LEN = 128
+ENCODER = "distilroberta-base"
+MAX_LEN = 64
 BATCH_SIZE = 32
 EPOCHS = 3
 
@@ -25,7 +25,7 @@ EPOCHS = 3
 TASKS = ["sentiment", "respect", "insult", "humiliate", "status", "attack_defend", "dehumanize",  # hostility 
          "violence", "genocide",                                                                   # violence 
          "hatespeech", "hate_speech_score"]                                                        # overall-judgment trunk
-task_structure=[[3], [7, 2, 2]]
+task_structure=[[2], [9, 2]]
 task_types=["multiclass"] * 10 + ["regression"]
 num_classes_per_task=[5] * 9 + [3, 1]
 
@@ -61,6 +61,7 @@ if __name__ == "__main__":
             encoder_integration=EncoderIntegration.HUGGINGFACE,
             # The tiny BERT only ships PyTorch weights, so convert them to TF on load
             from_pt=True,
+            trainable_encoder=False
         ),
 
         # Some hate_speech_score values are exactly -1.0, the default mask_value
