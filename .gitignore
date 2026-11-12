@@ -157,7 +157,7 @@ results/
 *.csv
 *.json
 *.yaml
-*.yml
+# *.yml
 
 # Except config in the package
 !multitask/**/*.yaml
