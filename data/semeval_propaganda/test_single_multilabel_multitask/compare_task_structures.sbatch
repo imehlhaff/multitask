@@ -50,10 +50,24 @@ source activate multitask
 # After activation: conda's activate scripts read unset variables
 set -u
 
+# TensorFlow compiles some GPU kernels at runtime and needs CUDA's libdevice and ptxas for it, from pip's
+# nvidia-cuda-nvcc-cu12 (pip install "nvidia-cuda-nvcc-cu12==12.5.82"). Put its ptxas ahead of older ones on PATH,
+# such as the Anaconda module's. Without this, the first GPU op fails with "JIT compilation failed".
+NVCC_DIR="$(python -c 'import site; print(site.getsitepackages()[0])')/nvidia/cuda_nvcc"
+if [ -d "$NVCC_DIR" ]; then
+    export PATH="$NVCC_DIR/bin:$PATH"
+    export XLA_FLAGS="--xla_gpu_cuda_data_dir=$NVCC_DIR"
+else
+    echo "Warning: $NVCC_DIR not found; GPU kernels may fail to compile" >&2
+fi
+
 cd "$SLURM_SUBMIT_DIR"
 # The repo root, so `import multitask` works even if the package isn't pip-installed in the env
 export PYTHONPATH="$(cd ../../.. && pwd)${PYTHONPATH:+:$PYTHONPATH}"
 export TF_CPP_MIN_LOG_LEVEL=1
+# Write output as it happens. Otherwise Python buffers it when writing to a file, so the log stays empty for a long
+# time and the last lines can be missing if the job crashes.
+export PYTHONUNBUFFERED=1
 
 STEP=${STEP:-train}
 ARGS=${ARGS:-}
@@ -63,7 +77,8 @@ echo "Job ${SLURM_JOB_ID} array task ${SLURM_ARRAY_TASK_ID} on $(hostname), step
 if [ "$STEP" = aggregate ]; then
     python compare_task_structures.py aggregate $ARGS
 else
-    # Training silently falls back to CPU if TensorFlow can't see the GPU, so print what it sees
-    python -c "import tensorflow as tf; print('GPUs visible to TensorFlow:', tf.config.list_physical_devices('GPU'))"
+    # Training silently falls back to CPU if TensorFlow can't see the GPU, so print what it sees. Then run one op on
+    # it, so a broken CUDA setup fails here in seconds rather than after the data and encoder load.
+    python -c "import tensorflow as tf; print('GPUs visible to TensorFlow:', tf.config.list_physical_devices('GPU')); print('GPU op check:', tf.math.rsqrt(tf.constant([4.0])).numpy())"
     python compare_task_structures.py train --task "$SLURM_ARRAY_TASK_ID" $ARGS
 fi
