@@ -34,6 +34,11 @@ Examples:
 import argparse
 import importlib.util
 import os
+
+# Make tf.keras mean tf-keras (Keras 2), the Keras that transformers builds its TF encoders with. Under Keras 3 the
+# model doesn't track the encoder's weights, so the encoder never trains. Must be set before TensorFlow is imported.
+os.environ["TF_USE_LEGACY_KERAS"] = "1"
+
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -271,10 +276,31 @@ def train(args):
         batch_size=args.batch_size,
         learning_rate=args.learning_rate,
         max_sequence_length=args.max_len,
+        # The package's warmup schedule is written for Keras 3 and crashes the tf-keras optimizer
+        use_warmup=False,
     )
     fit_ds, val_ds, dev_ds = make_dataset(fit, shuffle=True), make_dataset(val), make_dataset(dev)
 
-    trainer = Trainer(MultiTaskModel(config), training_config)
+    class Model(MultiTaskModel):
+        """MultiTaskModel's train_step and test_step return the latest batch's loss, and tf-keras logs that as the
+        epoch's loss, so val_loss (which early stopping watches) would be the last validation batch alone. Both
+        steps update a metric named "loss" if the model has one, so give it a running mean that Keras resets each
+        epoch."""
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.loss_mean = tf.keras.metrics.Mean(name="loss")
+
+        @property
+        def metrics(self):
+            return [self.loss_mean]
+
+    model = Model(config)
+    model(next(iter(fit_ds))[0])  # Build it, so its weights exist
+    tracked = {id(v) for v in model.trainable_variables}
+    if not all(id(v) in tracked for v in model.encoder.trainable_weights):
+        raise SystemExit("The encoder's weights aren't among the model's trainable variables, so it wouldn't train")
+    trainer = Trainer(model, training_config)
     start = time.time()
     history, _ = trainer.fit(fit_ds, val_ds, num_tasks=len(heads))
     seconds = time.time() - start
