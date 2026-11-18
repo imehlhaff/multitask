@@ -128,6 +128,9 @@ class MultiTaskModel(tf.keras.Model):
                     encoder_integration=self.config.encoder_config.encoder_integration,
                     trainable_encoder=self._trainable_encoder_override if self._trainable_encoder_override is not None else self.config.encoder_config.trainable_encoder,
                     api_key=self.config.encoder_config.api_key,
+                    # load_model passes the saved identifier through here, so keep from_pt or PyTorch-only models
+                    # (e.g. the tiny BERTs) fail to reload
+                    from_pt=self.config.encoder_config.from_pt,
                 )
                 self.encoder_config = self.config.encoder_config
             else:
