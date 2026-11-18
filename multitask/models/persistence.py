@@ -2,6 +2,7 @@
 
 import json
 import os
+import warnings
 from typing import Optional, Union, Dict
 
 import tensorflow as tf
@@ -185,7 +186,18 @@ def load_model(
         model.load_task_weights(weights_path_legacy)
     else:
         raise ValueError(f"Weights file not found: {filepath} (expected weights.weights.h5 or legacy weights/weights.h5)")
-    
+
+    # A Hugging Face encoder's weights aren't in weights.weights.h5; MultiTaskModel.save writes them separately
+    encoder_weights_path = os.path.join(filepath, 'encoder_weights.npz')
+    if os.path.exists(encoder_weights_path):
+        model.load_untracked_encoder_weights(encoder_weights_path)
+    elif model._untracked_encoder_weights():
+        warnings.warn(
+            f"{filepath} has no encoder_weights.npz, so the encoder keeps its pretrained weights. Models saved before "
+            "Hugging Face encoder weights were saved separately never stored their fine-tuned encoder.",
+            stacklevel=2,
+        )
+
     # Load thresholds if available
     thresholds = None
     thresholds_path = os.path.join(filepath, 'thresholds.json')

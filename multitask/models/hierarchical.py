@@ -4,6 +4,7 @@ Multi-task learning model with hierarchical branching.
 This module implements a flexible hierarchical branching architecture for multi-task learning.
 """
 import os
+import numpy as np
 import tensorflow as tf
 from typing import Optional, Union, Dict, List, Any, Tuple
 from multitask.config import ModelConfig, EncoderConfig, EncoderInputType, EncoderIntegration
@@ -128,6 +129,9 @@ class MultiTaskModel(tf.keras.Model):
                     encoder_integration=self.config.encoder_config.encoder_integration,
                     trainable_encoder=self._trainable_encoder_override if self._trainable_encoder_override is not None else self.config.encoder_config.trainable_encoder,
                     api_key=self.config.encoder_config.api_key,
+                    # load_model passes the saved identifier through here, so keep from_pt or PyTorch-only models
+                    # (e.g. the tiny BERTs) fail to reload
+                    from_pt=self.config.encoder_config.from_pt,
                 )
                 self.encoder_config = self.config.encoder_config
             else:
@@ -488,6 +492,62 @@ class MultiTaskModel(tf.keras.Model):
         
         return output_dict
     
+    def _untracked_encoder_weights(self, trainable_only: bool = False) -> List[tf.Variable]:
+        """Encoder weights that Keras doesn't count as this model's own.
+
+        transformers builds its TF models (TFAutoModel) with tf-keras (Keras 2), even when ``tf.keras`` is Keras 3.
+        A Keras 3 model doesn't collect the weights of a tf-keras model stored as an attribute, so a Hugging Face
+        encoder's weights are missing from ``trainable_variables``, ``weights``, ``get_weights()`` and
+        ``save_weights()``. Without adding them back, the encoder never trains, early stopping restores everything
+        but the encoder, and saving drops its fine-tuned weights.
+
+        Returns an empty list when Keras already tracks the encoder (a Keras 3 encoder, or ``TF_USE_LEGACY_KERAS=1``),
+        so callers can always add the result. With ``trainable_only``, returns only trainable weights, and none when
+        the encoder is frozen (``trainable_encoder=False``).
+        """
+        encoder = getattr(self, 'encoder', None)
+        if not getattr(self, 'uses_encoder', False) or encoder is None or not hasattr(encoder, 'weights'):
+            return []
+        if trainable_only:
+            if not encoder.trainable:
+                return []
+            tracked, candidates = self.trainable_variables, encoder.trainable_weights
+        else:
+            tracked, candidates = self.weights, encoder.weights
+        tracked_ids = {id(v) for v in tracked}
+        return [v for v in candidates if id(v) not in tracked_ids]
+
+    def get_weights(self) -> List[np.ndarray]:
+        """Keras' weights plus any untracked encoder weights (see ``_untracked_encoder_weights``), so callbacks that
+        snapshot and restore weights, such as EarlyStopping(restore_best_weights=True), include the encoder."""
+        return super().get_weights() + [v.numpy() for v in self._untracked_encoder_weights()]
+
+    def set_weights(self, weights: List[np.ndarray]) -> None:
+        """Inverse of ``get_weights``: Keras' weights first, then any untracked encoder weights."""
+        extra = self._untracked_encoder_weights()
+        n_keras = len(weights) - len(extra)
+        if n_keras != len(self.weights):
+            raise ValueError(
+                f"set_weights got {len(weights)} arrays, but the model has {len(self.weights)} Keras weights plus "
+                f"{len(extra)} encoder weights Keras doesn't track; pass the list from get_weights()"
+            )
+        super().set_weights(weights[:n_keras])
+        for variable, value in zip(extra, weights[n_keras:]):
+            variable.assign(value)
+
+    def load_untracked_encoder_weights(self, path: str) -> None:
+        """Restore the encoder weights that ``save`` writes to ``encoder_weights.npz``, in the same order."""
+        extra = self._untracked_encoder_weights()
+        with np.load(path) as stored:
+            values = [stored[f'arr_{i}'] for i in range(len(stored.files))]
+        if len(values) != len(extra):
+            raise ValueError(
+                f"{path} has {len(values)} encoder weights, but this model's encoder has {len(extra)}. "
+                "Was it saved with a different encoder?"
+            )
+        for variable, value in zip(extra, values):
+            variable.assign(value)
+
     def train_step(self, data):
         """Custom training step to filter out pooled outputs before loss computation."""
         if len(data) == 3:
@@ -515,9 +575,10 @@ class MultiTaskModel(tf.keras.Model):
                 metric.update_state(loss)
                 break
 
-        # Compute gradients and update weights
-        gradients = tape.gradient(loss, self.trainable_variables)
-        self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
+        # Compute gradients and update weights, including a Hugging Face encoder's (see _untracked_encoder_weights)
+        variables = list(self.trainable_variables) + self._untracked_encoder_weights(trainable_only=True)
+        gradients = tape.gradient(loss, variables)
+        self.optimizer.apply_gradients(zip(gradients, variables))
 
         # Update metrics manually to support masked labels (ModelConfig.mask_value)
         for metric in self.metrics:
@@ -1128,7 +1189,15 @@ class MultiTaskModel(tf.keras.Model):
         # Save model weights (Keras 3 requires path to end in .weights.h5)
         weights_path = os.path.join(filepath, 'weights.weights.h5')
         self.save_weights(weights_path)
-        
+
+        # save_weights leaves out a Hugging Face encoder's weights (see _untracked_encoder_weights), so save them too.
+        # Otherwise loading would put the trained heads on top of the original pretrained encoder.
+        encoder_weights = self._untracked_encoder_weights()
+        encoder_weights_path = None
+        if encoder_weights:
+            encoder_weights_path = os.path.join(filepath, 'encoder_weights.npz')
+            np.savez(encoder_weights_path, *[v.numpy() for v in encoder_weights])
+
         # Save ModelConfig (flat encoder keys for backward compat with load)
         config_dict = {
             'task_structure': self.config.task_structure,
@@ -1177,6 +1246,8 @@ class MultiTaskModel(tf.keras.Model):
         
         print(f"Model saved to {filepath}/")
         print(f"  - Weights: {weights_path}")
+        if encoder_weights_path is not None:
+            print(f"  - Encoder weights: {encoder_weights_path}")
         print(f"  - Config: {os.path.join(filepath, 'config.json')}")
         print(f"  - Metadata: {os.path.join(filepath, 'metadata.json')}")
         if thresholds is not None:
