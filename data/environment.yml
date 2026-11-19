@@ -1,0 +1,22 @@
+# Minimal environment for the data download, cleaning and exploration scripts and notebooks in data/.
+# Versions match the top-level environment.yml where packages overlap, except numpy: the notebooks were run with
+# numpy 2.4.6, while the top-level file pins 1.26.4.
+# Scripts that train models (test_pipeline.py, test_single_multilabel_multitask/compare_task_structures.py) need
+# TensorFlow and the multitask library, so they use the top-level environment instead.
+name: multitask-data
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11.14
+  - numpy=2.4.6
+  - pandas=2.3.3
+  - pyarrow=22.0.0          # pd.read_parquet in hatespeech_dlab
+  - python-duckdb=1.5.6
+  - requests=2.32.5
+  - scipy=1.16.3
+  - matplotlib=3.10.8
+  - ipykernel=7.4.0         # Kernel for the notebooks
+  - pip=26.0.1
+  - pip:
+      - ftfy==6.3.1
+      - huggingface-hub==0.36.2
