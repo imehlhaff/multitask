@@ -9,7 +9,9 @@
 #
 # Lines marked EDIT are cluster-specific. Run everything from this directory:
 #
-#   mkdir -p results/logs
+#   # Slurm opens the log files before the script starts and doesn't create their folders: without both, every
+#   # job fails within seconds and leaves no log
+#   mkdir -p results/logs results/errors
 #   # Download the encoder once, so 23 jobs don't race to fill the Hugging Face cache (and in case compute nodes
 #   # are offline)
 #   python -c "from transformers import AutoTokenizer, AutoModel; AutoTokenizer.from_pretrained('roberta-base'); AutoModel.from_pretrained('roberta-base')"
